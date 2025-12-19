@@ -1,0 +1,179 @@
+"use client";
+
+import type { Entry } from "@/types";
+import { retryAIAnalysis, regenerateAIAnalysis } from "@/actions/ai-actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+interface InsightPanelProps {
+  entry: Entry;
+}
+
+const sentimentEmoji: Record<string, string> = {
+  positive: "😊",
+  negative: "😔",
+  neutral: "😐",
+  mixed: "🤔",
+};
+
+export function InsightPanel({ entry }: InsightPanelProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const router = useRouter();
+
+  const handleRetry = async () => {
+    setIsProcessing(true);
+    await retryAIAnalysis(entry.id);
+    router.refresh();
+    setIsProcessing(false);
+  };
+
+  const handleRegenerate = async () => {
+    setIsProcessing(true);
+    await regenerateAIAnalysis(entry.id);
+    router.refresh();
+    setIsProcessing(false);
+  };
+
+  // Pending state
+  if (entry.aiStatus === "pending") {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">⏳</span>
+          <div>
+            <h3 className="font-semibold text-gray-900">AI Analysis Pending</h3>
+            <p className="text-sm text-gray-600">
+              Your entry will be analyzed shortly...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Processing state
+  if (entry.aiStatus === "processing") {
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl animate-pulse">🤖</span>
+          <div>
+            <h3 className="font-semibold text-blue-900">AI Analyzing...</h3>
+            <p className="text-sm text-blue-700">
+              Generating insights for your entry. This may take a few seconds.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Failed state
+  if (entry.aiStatus === "failed") {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h3 className="font-semibold text-red-900">AI Analysis Failed</h3>
+              <p className="text-sm text-red-700">
+                {entry.aiError || "Something went wrong during analysis."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleRetry}
+            disabled={isProcessing}
+            className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {isProcessing ? "Retrying..." : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Success state - show insights
+  if (entry.aiStatus === "success" && entry.aiSummary) {
+    return (
+      <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <span>✨</span>
+            AI Insights
+          </h3>
+          <button
+            onClick={handleRegenerate}
+            disabled={isProcessing}
+            className="px-3 py-1 text-xs bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+          >
+            {isProcessing ? "Regenerating..." : "Regenerate"}
+          </button>
+        </div>
+
+        {/* Summary */}
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-1">Summary</h4>
+          <p className="text-gray-800 leading-relaxed">{entry.aiSummary}</p>
+        </div>
+
+        {/* Sentiment */}
+        {entry.aiSentiment && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Sentiment</h4>
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">
+                {sentimentEmoji[entry.aiSentiment.label] || "😐"}
+              </span>
+              <div>
+                <p className="font-medium capitalize text-gray-800">
+                  {entry.aiSentiment.label}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${
+                        entry.aiSentiment.score > 0.3
+                          ? "bg-green-500"
+                          : entry.aiSentiment.score < -0.3
+                          ? "bg-red-500"
+                          : "bg-gray-400"
+                      }`}
+                      style={{
+                        width: `${Math.abs(entry.aiSentiment.score) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-600">
+                    {entry.aiSentiment.score.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Themes */}
+        {entry.aiThemes && entry.aiThemes.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Key Themes</h4>
+            <div className="flex flex-wrap gap-2">
+              {entry.aiThemes.map((theme, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-white text-gray-700 text-sm rounded-full border border-gray-200"
+                >
+                  {theme}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
