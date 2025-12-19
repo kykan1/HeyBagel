@@ -2,7 +2,7 @@
 
 import type { Entry } from "@/types";
 import { retryAIAnalysis, regenerateAIAnalysis } from "@/actions/ai-actions";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface InsightPanelProps {
@@ -18,18 +18,47 @@ const sentimentEmoji: Record<string, string> = {
 
 export function InsightPanel({ entry }: InsightPanelProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Countdown timer for rate limit retry
+  useEffect(() => {
+    if (retryCountdown && retryCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRetryCountdown(retryCountdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCountdown]);
 
   const handleRetry = async () => {
     setIsProcessing(true);
-    await retryAIAnalysis(entry.id);
+    setActionError(null);
+    
+    const result = await retryAIAnalysis(entry.id);
+    
+    if (!result.success && result.retryAfter) {
+      setRetryCountdown(result.retryAfter);
+      setActionError(result.error);
+    } else if (!result.success) {
+      setActionError(result.error);
+    }
+    
     router.refresh();
     setIsProcessing(false);
   };
 
   const handleRegenerate = async () => {
     setIsProcessing(true);
-    await regenerateAIAnalysis(entry.id);
+    setActionError(null);
+    
+    const result = await regenerateAIAnalysis(entry.id);
+    
+    if (!result.success) {
+      setActionError(result.error);
+    }
+    
     router.refresh();
     setIsProcessing(false);
   };
@@ -37,13 +66,13 @@ export function InsightPanel({ entry }: InsightPanelProps) {
   // Pending state
   if (entry.aiStatus === "pending") {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-6 animate-pulse">
         <div className="flex items-center gap-3">
           <span className="text-2xl">⏳</span>
           <div>
             <h3 className="font-semibold text-gray-900">AI Analysis Pending</h3>
             <p className="text-sm text-gray-600">
-              Your entry will be analyzed shortly...
+              Your entry will be analyzed shortly. This usually takes 3-5 seconds.
             </p>
           </div>
         </div>
@@ -54,14 +83,22 @@ export function InsightPanel({ entry }: InsightPanelProps) {
   // Processing state
   if (entry.aiStatus === "processing") {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
         <div className="flex items-center gap-3">
-          <span className="text-2xl animate-pulse">🤖</span>
-          <div>
+          <div className="relative">
+            <span className="text-2xl animate-bounce">🤖</span>
+            <div className="absolute inset-0 animate-ping opacity-20">🤖</div>
+          </div>
+          <div className="flex-1">
             <h3 className="font-semibold text-blue-900">AI Analyzing...</h3>
             <p className="text-sm text-blue-700">
-              Generating insights for your entry. This may take a few seconds.
+              Reading your entry and generating personalized insights...
             </p>
+            <div className="mt-2 flex gap-1">
+              <div className="h-1 w-8 bg-blue-400 rounded animate-pulse" style={{ animationDelay: "0ms" }}></div>
+              <div className="h-1 w-8 bg-blue-400 rounded animate-pulse" style={{ animationDelay: "150ms" }}></div>
+              <div className="h-1 w-8 bg-blue-400 rounded animate-pulse" style={{ animationDelay: "300ms" }}></div>
+            </div>
           </div>
         </div>
       </div>
@@ -70,25 +107,63 @@ export function InsightPanel({ entry }: InsightPanelProps) {
 
   // Failed state
   if (entry.aiStatus === "failed") {
+    const isRateLimited = entry.aiError?.includes("rate limit") || entry.aiError?.includes("Rate limit");
+    const isAPIKeyIssue = entry.aiError?.includes("API key") || entry.aiError?.includes("Invalid");
+    const canRetryNow = !retryCountdown || retryCountdown <= 0;
+
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-red-900">AI Analysis Failed</h3>
-              <p className="text-sm text-red-700">
-                {entry.aiError || "Something went wrong during analysis."}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-red-900">AI Analysis Failed</h3>
+            <p className="text-sm text-red-700 mt-1 leading-relaxed">
+              {entry.aiError || "Something went wrong during analysis."}
+            </p>
+            
+            {actionError && actionError !== entry.aiError && (
+              <p className="text-sm text-red-600 mt-2 italic">
+                {actionError}
               </p>
-            </div>
+            )}
+
+            {/* Helpful tips based on error type */}
+            {isRateLimited && (
+              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                💡 Tip: Rate limits reset after a short time. Please wait before retrying.
+              </div>
+            )}
+            {isAPIKeyIssue && (
+              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                💡 Tip: Check that your OPENAI_API_KEY environment variable is set correctly.
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="flex gap-2">
           <button
             onClick={handleRetry}
-            disabled={isProcessing}
+            disabled={isProcessing || !canRetryNow}
             className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
           >
-            {isProcessing ? "Retrying..." : "Retry"}
+            {isProcessing ? (
+              <>
+                <span className="inline-block animate-spin mr-2">⏳</span>
+                Retrying...
+              </>
+            ) : retryCountdown && retryCountdown > 0 ? (
+              `Retry in ${retryCountdown}s`
+            ) : (
+              "Retry Analysis"
+            )}
           </button>
+          
+          {!canRetryNow && (
+            <div className="flex items-center px-3 py-2 bg-amber-100 text-amber-800 text-xs rounded-lg">
+              ⏰ Please wait {retryCountdown}s
+            </div>
+          )}
         </div>
       </div>
     );

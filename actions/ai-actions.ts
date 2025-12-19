@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { analyzeEntry } from "@/lib/ai/entry-analysis";
 import { getEntryById, updateEntryAI } from "@/lib/db/queries";
+import { classifyAIError, type ClassifiedError } from "@/lib/ai/errors";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
-  | { success: false; error: string };
+  | { success: false; error: string; errorType?: string; canRetry?: boolean; retryAfter?: number };
 
 /**
  * Process AI analysis for a journal entry
@@ -49,20 +50,30 @@ export async function processEntryAI(
 
       return { success: true, data: undefined };
     } catch (aiError) {
-      // AI failed - store the error
-      const errorMessage = aiError instanceof Error 
-        ? aiError.message 
-        : "Unknown AI error";
-
+      // Classify the error for better handling
+      const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+      
+      // Store the user-friendly error message
       await updateEntryAI(entryId, {
         aiStatus: "failed",
-        aiError: errorMessage,
+        aiError: classified.userMessage,
       });
 
       revalidatePath(`/entries/${entryId}`);
 
-      console.error("AI analysis failed:", aiError);
-      return { success: false, error: errorMessage };
+      console.error("AI analysis failed:", {
+        type: classified.type,
+        message: classified.message,
+        canRetry: classified.canRetry,
+      });
+
+      return { 
+        success: false, 
+        error: classified.userMessage,
+        errorType: classified.type,
+        canRetry: classified.canRetry,
+        retryAfter: classified.retryAfter,
+      };
     }
   } catch (error) {
     console.error("Error in processEntryAI:", error);

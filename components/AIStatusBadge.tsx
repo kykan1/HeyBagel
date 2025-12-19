@@ -29,12 +29,17 @@ const statusConfig: Record<AIStatus, { label: string; className: string; icon: s
 
 export function AIStatusBadge({ status }: AIStatusBadgeProps) {
   const config = statusConfig[status];
+  const isProcessing = status === "processing";
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${config.className}`}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${config.className} ${
+        isProcessing ? "animate-pulse" : ""
+      }`}
     >
-      <span>{config.icon}</span>
+      <span className={isProcessing ? "animate-bounce" : ""}>
+        {config.icon}
+      </span>
       <span>{config.label}</span>
     </span>
   );

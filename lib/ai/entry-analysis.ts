@@ -1,5 +1,6 @@
 import { getOpenAI } from "./client";
 import type { AISentiment } from "@/types";
+import { validateEntryContent, classifyAIError } from "./errors";
 
 export interface EntryAnalysisResult {
   summary: string;
@@ -7,11 +8,35 @@ export interface EntryAnalysisResult {
   themes: string[];
 }
 
+// Timeout for AI requests (30 seconds)
+const AI_TIMEOUT_MS = 30000;
+
+/**
+ * Wraps a promise with a timeout
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
+    ),
+  ]);
+}
+
 /**
  * Analyzes a journal entry using OpenAI GPT-4o-mini
  * Returns summary, sentiment, and themes
  */
 export async function analyzeEntry(content: string): Promise<EntryAnalysisResult> {
+  // Validate content before sending
+  const validationError = validateEntryContent(content);
+  if (validationError) {
+    throw new Error(validationError.userMessage);
+  }
+
   const openai = getOpenAI();
 
   const systemPrompt = `You are a thoughtful journaling assistant. Analyze the user's journal entry and provide:
@@ -32,16 +57,25 @@ Respond in JSON format:
 }`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: content },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 500,
-    });
+    // Wrap OpenAI call with timeout
+    const completion = await withTimeout(
+      openai.chat.completions.create(
+        {
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: content },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 500,
+        },
+        {
+          timeout: AI_TIMEOUT_MS, // OpenAI SDK timeout in options
+        }
+      ),
+      AI_TIMEOUT_MS // Our wrapper timeout
+    );
 
     const result = completion.choices[0]?.message?.content;
 
@@ -65,8 +99,17 @@ Respond in JSON format:
       themes: parsed.themes,
     };
   } catch (error) {
-    console.error("Error analyzing entry:", error);
-    throw error;
+    // Classify the error for better user messaging
+    const classified = classifyAIError(error);
+    console.error("Error analyzing entry:", {
+      type: classified.type,
+      message: classified.message,
+    });
+    
+    // Re-throw with user-friendly message
+    const enhancedError = new Error(classified.userMessage);
+    (enhancedError as any).classified = classified;
+    throw enhancedError;
   }
 }
 
