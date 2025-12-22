@@ -2,8 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { analyzeEntry } from "@/lib/ai/entry-analysis";
-import { getEntryById, updateEntryAI } from "@/lib/db/queries";
+import { generateBatchInsight } from "@/lib/ai/batch-insights";
+import { 
+  getEntryById, 
+  updateEntryAI, 
+  createInsight, 
+  updateInsightAI, 
+  getEntriesByDateRange,
+  getInsightById
+} from "@/lib/db/queries";
 import { classifyAIError, type ClassifiedError } from "@/lib/ai/errors";
+import type { InsightType } from "@/types";
+import { randomBytes } from "crypto";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -112,6 +122,168 @@ export async function regenerateAIAnalysis(entryId: string): Promise<ActionResul
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to regenerate analysis"
+    };
+  }
+}
+
+/**
+ * Generate a batch insight (weekly or monthly reflection)
+ */
+export async function generateInsight(
+  insightType: InsightType,
+  startDate: string,
+  endDate: string
+): Promise<ActionResult<{ insightId: string }>> {
+  try {
+    // Get entries for the date range
+    const entries = await getEntriesByDateRange(startDate, endDate);
+
+    if (entries.length === 0) {
+      return {
+        success: false,
+        error: `No entries found between ${startDate} and ${endDate}`,
+      };
+    }
+
+    // Create insight record
+    const insightId = randomBytes(16).toString("hex");
+    await createInsight(insightId, insightType, startDate, endDate);
+
+    // Update to processing
+    await updateInsightAI(insightId, {
+      aiStatus: "processing",
+    });
+
+    revalidatePath("/insights");
+
+    // Generate the batch insight
+    try {
+      const result = await generateBatchInsight(entries, insightType);
+
+      // Store the results
+      await updateInsightAI(insightId, {
+        aiStatus: "success",
+        content: result.content,
+        themes: result.themes,
+        sentimentTrend: result.sentimentTrend,
+        aiError: null,
+      });
+
+      revalidatePath("/insights");
+
+      return { success: true, data: { insightId } };
+    } catch (aiError) {
+      // Classify the error
+      const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+
+      // Store the error
+      await updateInsightAI(insightId, {
+        aiStatus: "failed",
+        aiError: classified.userMessage,
+      });
+
+      revalidatePath("/insights");
+
+      console.error("Batch insight generation failed:", {
+        type: classified.type,
+        message: classified.message,
+        canRetry: classified.canRetry,
+      });
+
+      return {
+        success: false,
+        error: classified.userMessage,
+        errorType: classified.type,
+        canRetry: classified.canRetry,
+        retryAfter: classified.retryAfter,
+      };
+    }
+  } catch (error) {
+    console.error("Error in generateInsight:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to generate insight"
+    };
+  }
+}
+
+/**
+ * Retry generating an insight that failed
+ */
+export async function retryInsight(insightId: string): Promise<ActionResult> {
+  try {
+    const insight = await getInsightById(insightId);
+    
+    if (!insight) {
+      return { success: false, error: "Insight not found" };
+    }
+
+    // Reset to pending
+    await updateInsightAI(insightId, {
+      aiStatus: "pending",
+      aiError: null,
+    });
+
+    revalidatePath("/insights");
+
+    // Get entries for the date range
+    const entries = await getEntriesByDateRange(insight.startDate, insight.endDate);
+
+    if (entries.length === 0) {
+      return {
+        success: false,
+        error: `No entries found for this insight`,
+      };
+    }
+
+    // Update to processing
+    await updateInsightAI(insightId, {
+      aiStatus: "processing",
+    });
+
+    revalidatePath("/insights");
+
+    // Generate the batch insight
+    try {
+      const result = await generateBatchInsight(entries, insight.insightType);
+
+      // Store the results
+      await updateInsightAI(insightId, {
+        aiStatus: "success",
+        content: result.content,
+        themes: result.themes,
+        sentimentTrend: result.sentimentTrend,
+        aiError: null,
+      });
+
+      revalidatePath("/insights");
+
+      return { success: true, data: undefined };
+    } catch (aiError) {
+      // Classify the error
+      const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+
+      // Store the error
+      await updateInsightAI(insightId, {
+        aiStatus: "failed",
+        aiError: classified.userMessage,
+      });
+
+      revalidatePath("/insights");
+
+      return {
+        success: false,
+        error: classified.userMessage,
+        errorType: classified.type,
+        canRetry: classified.canRetry,
+        retryAfter: classified.retryAfter,
+      };
+    }
+  } catch (error) {
+    console.error("Error retrying insight:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to retry insight"
     };
   }
 }

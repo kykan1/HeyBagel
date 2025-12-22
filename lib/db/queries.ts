@@ -1,5 +1,5 @@
 import { getDb } from "./client";
-import type { Entry, AISentiment, AIStatus, Mood } from "@/types";
+import type { Entry, AISentiment, AIStatus, Mood, Insight, InsightType, SentimentTrend } from "@/types";
 
 // Helper to convert DB row to Entry type
 function rowToEntry(row: any): Entry {
@@ -12,6 +12,24 @@ function rowToEntry(row: any): Entry {
     aiSummary: row.ai_summary,
     aiSentiment: row.ai_sentiment ? JSON.parse(row.ai_sentiment) : null,
     aiThemes: row.ai_themes ? JSON.parse(row.ai_themes) : null,
+    aiStatus: row.ai_status as AIStatus,
+    aiError: row.ai_error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// Helper to convert DB row to Insight type
+function rowToInsight(row: any): Insight {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    insightType: row.insight_type as InsightType,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    content: row.content,
+    themes: row.themes ? JSON.parse(row.themes) : null,
+    sentimentTrend: row.sentiment_trend ? JSON.parse(row.sentiment_trend) : null,
     aiStatus: row.ai_status as AIStatus,
     aiError: row.ai_error,
     createdAt: row.created_at,
@@ -171,5 +189,112 @@ export function updateEntryAI(
   );
 
   return getEntryById(id, userId);
+}
+
+// ============================================================================
+// INSIGHT QUERIES
+// ============================================================================
+
+export function getAllInsights(userId: string = "default_user"): Insight[] {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT * FROM insights
+    WHERE user_id = ?
+    ORDER BY start_date DESC, created_at DESC
+  `);
+  const rows = stmt.all(userId);
+  return rows.map(rowToInsight);
+}
+
+export function getInsightById(id: string, userId: string = "default_user"): Insight | null {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT * FROM insights
+    WHERE id = ? AND user_id = ?
+  `);
+  const row = stmt.get(id, userId);
+  return row ? rowToInsight(row) : null;
+}
+
+export function createInsight(
+  id: string,
+  insightType: InsightType,
+  startDate: string,
+  endDate: string,
+  userId: string = "default_user"
+): Insight {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  const stmt = db.prepare(`
+    INSERT INTO insights (
+      id, user_id, insight_type, start_date, end_date,
+      ai_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+  `);
+
+  stmt.run(id, userId, insightType, startDate, endDate, now, now);
+
+  const insight = getInsightById(id, userId);
+  if (!insight) {
+    throw new Error("Failed to create insight");
+  }
+
+  return insight;
+}
+
+export function updateInsightAI(
+  id: string,
+  aiData: {
+    aiStatus: AIStatus;
+    content?: string | null;
+    themes?: string[] | null;
+    sentimentTrend?: SentimentTrend | null;
+    aiError?: string | null;
+  },
+  userId: string = "default_user"
+): Insight | null {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  const stmt = db.prepare(`
+    UPDATE insights
+    SET
+      ai_status = ?,
+      content = ?,
+      themes = ?,
+      sentiment_trend = ?,
+      ai_error = ?,
+      updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `);
+
+  stmt.run(
+    aiData.aiStatus,
+    aiData.content ?? null,
+    aiData.themes ? JSON.stringify(aiData.themes) : null,
+    aiData.sentimentTrend ? JSON.stringify(aiData.sentimentTrend) : null,
+    aiData.aiError ?? null,
+    now,
+    id,
+    userId
+  );
+
+  return getInsightById(id, userId);
+}
+
+export function getEntriesByDateRange(
+  startDate: string,
+  endDate: string,
+  userId: string = "default_user"
+): Entry[] {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT * FROM entries
+    WHERE user_id = ? AND date >= ? AND date <= ?
+    ORDER BY date ASC
+  `);
+  const rows = stmt.all(userId, startDate, endDate);
+  return rows.map(rowToEntry);
 }
 
