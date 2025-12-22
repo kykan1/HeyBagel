@@ -30,6 +30,24 @@ function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date DESC);
     CREATE INDEX IF NOT EXISTS idx_entries_ai_status ON entries(ai_status);
     CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, date DESC);
+
+    CREATE TABLE IF NOT EXISTS insights (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT 'default_user',
+      insight_type TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      content TEXT,
+      themes TEXT,
+      sentiment_trend TEXT,
+      ai_status TEXT NOT NULL DEFAULT 'pending',
+      ai_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_insights_date ON insights(start_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_insights_user_date ON insights(user_id, start_date DESC);
   `);
 
   isInitialized = true;

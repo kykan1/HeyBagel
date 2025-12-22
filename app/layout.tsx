@@ -21,7 +21,13 @@ export default function RootLayout({
               <Link href="/" className="text-xl font-semibold text-gray-900">
                 Hey Bagel 🥯
               </Link>
-              <nav>
+              <nav className="flex items-center gap-3">
+                <Link
+                  href="/insights"
+                  className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+                >
+                  Insights
+                </Link>
                 <Link
                   href="/entries/new"
                   className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
