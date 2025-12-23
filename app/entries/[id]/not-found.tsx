@@ -2,25 +2,24 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Page Not Found - Hey Bagel",
-  description: "The page you're looking for doesn't exist.",
+  title: "Entry Not Found - Hey Bagel",
+  description: "This journal entry doesn't exist.",
 };
 
 /**
- * Root-level 404 Not Found page
- * Shown when a route doesn't exist
+ * Not Found page for individual entry routes
+ * Shown when an entry ID doesn't exist in the database
  */
-export default function NotFound() {
+export default function EntryNotFound() {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="text-center max-w-md px-4">
-        <div className="text-8xl mb-6">🥯</div>
-        <h1 className="text-5xl font-bold text-gray-900 mb-3">404</h1>
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-          Page Not Found
-        </h2>
+        <div className="text-7xl mb-6">📝</div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">
+          Entry Not Found
+        </h1>
         <p className="text-gray-600 mb-8">
-          This page doesn't exist. Maybe it never did, or maybe it's just taking a bagel break.
+          This journal entry doesn't exist. It may have been deleted, or the link might be incorrect.
         </p>
         
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -28,19 +27,15 @@ export default function NotFound() {
             href="/"
             className="px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
           >
-            Back to Journal
+            View All Entries
           </Link>
           <Link
             href="/entries/new"
             className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
           >
-            Write an Entry
+            Create New Entry
           </Link>
         </div>
-
-        <p className="mt-8 text-sm text-gray-500">
-          Lost? Press <kbd className="px-2 py-1 text-xs bg-gray-100 border border-gray-300 rounded">h</kbd> to go home
-        </p>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { createEntry as dbCreateEntry, updateEntry as dbUpdateEntry, deleteEntry
 import { createEntrySchema, updateEntrySchema } from "@/lib/utils/validation";
 import { getTodayISO } from "@/lib/utils/date";
 import { randomUUID } from "crypto";
+import { actionLogger } from "@/lib/utils/logger";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -15,45 +16,54 @@ type ActionResult<T = void> =
 export async function createEntry(
   formData: FormData
 ): Promise<ActionResult<{ entryId: string }>> {
-  try {
-    // Parse form data
-    const rawData = {
-      content: formData.get("content") as string,
-      mood: formData.get("mood") as string | null,
-      date: formData.get("date") as string | null,
-    };
+  return actionLogger.time("Create Entry", async () => {
+    try {
+      // Parse form data
+      const rawData = {
+        content: formData.get("content") as string,
+        mood: formData.get("mood") as string | null,
+        date: formData.get("date") as string | null,
+      };
 
-    // Validate
-    const validatedData = createEntrySchema.parse({
-      content: rawData.content,
-      mood: rawData.mood || undefined,
-      date: rawData.date || undefined,
-    });
+      // Validate
+      const validatedData = createEntrySchema.parse({
+        content: rawData.content,
+        mood: rawData.mood || undefined,
+        date: rawData.date || undefined,
+      });
 
-    // Create entry
-    const entryId = randomUUID();
-    const date = validatedData.date || getTodayISO();
-    
-    await dbCreateEntry(
-      entryId,
-      validatedData.content,
-      date,
-      validatedData.mood ?? null
-    );
+      // Create entry
+      const entryId = randomUUID();
+      const date = validatedData.date || getTodayISO();
+      
+      await dbCreateEntry(
+        entryId,
+        validatedData.content,
+        date,
+        validatedData.mood ?? null
+      );
 
-    // Revalidate home page
-    revalidatePath("/");
-    revalidatePath(`/entries/${entryId}`);
+      // Revalidate home page
+      revalidatePath("/");
+      revalidatePath(`/entries/${entryId}`);
 
-    return { success: true, data: { entryId } };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      actionLogger.info("Entry created successfully", { 
+        entryId, 
+        mood: validatedData.mood,
+        contentLength: validatedData.content.length,
+      });
+
+      return { success: true, data: { entryId } };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        actionLogger.warn("Validation failed", { error: error.errors });
+        return { success: false, error: error.errors[0].message };
+      }
+      
+      actionLogger.error("Failed to create entry", error);
+      return { success: false, error: "Failed to create entry. Please try again." };
     }
-    
-    console.error("Error creating entry:", error);
-    return { success: false, error: "Failed to create entry. Please try again." };
-  }
+  });
 }
 
 export async function createEntryAndRedirect(formData: FormData): Promise<void> {

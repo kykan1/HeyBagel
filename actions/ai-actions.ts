@@ -14,6 +14,7 @@ import {
 import { classifyAIError, type ClassifiedError } from "@/lib/ai/errors";
 import type { InsightType } from "@/types";
 import { randomBytes } from "crypto";
+import { actionLogger } from "@/lib/utils/logger";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -26,72 +27,85 @@ type ActionResult<T = void> =
 export async function processEntryAI(
   entryId: string
 ): Promise<ActionResult> {
-  try {
-    // Get the entry
-    const entry = await getEntryById(entryId);
+  const context = { action: "processEntryAI", entryId };
 
-    if (!entry) {
-      return { success: false, error: "Entry not found" };
-    }
-
-    // Update status to processing
-    await updateEntryAI(entryId, {
-      aiStatus: "processing",
-    });
-
-    // Note: No revalidatePath here - it causes errors during render phase
-    // We only revalidate after AI completes (success or failure)
-
-    // Analyze the entry with OpenAI
+  return actionLogger.time("Process Entry AI", async () => {
     try {
-      const result = await analyzeEntry(entry.content);
+      // Get the entry
+      const entry = await getEntryById(entryId);
 
-      // Store the results
+      if (!entry) {
+        actionLogger.warn("Entry not found", context);
+        return { success: false, error: "Entry not found" };
+      }
+
+      actionLogger.info("Starting AI analysis", { ...context, contentLength: entry.content.length });
+
+      // Update status to processing
       await updateEntryAI(entryId, {
-        aiStatus: "success",
-        aiSummary: result.summary,
-        aiSentiment: result.sentiment,
-        aiThemes: result.themes,
-        aiError: null,
+        aiStatus: "processing",
       });
 
-      revalidatePath(`/entries/${entryId}`);
-      revalidatePath("/");
+      // Note: No revalidatePath here - it causes errors during render phase
+      // We only revalidate after AI completes (success or failure)
 
-      return { success: true, data: undefined };
-    } catch (aiError) {
-      // Classify the error for better handling
-      const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
-      
-      // Store the user-friendly error message
-      await updateEntryAI(entryId, {
-        aiStatus: "failed",
-        aiError: classified.userMessage,
-      });
+      // Analyze the entry with OpenAI
+      try {
+        const result = await analyzeEntry(entry.content);
 
-      revalidatePath(`/entries/${entryId}`);
+        // Store the results
+        await updateEntryAI(entryId, {
+          aiStatus: "success",
+          aiSummary: result.summary,
+          aiSentiment: result.sentiment,
+          aiThemes: result.themes,
+          aiError: null,
+        });
 
-      console.error("AI analysis failed:", {
-        type: classified.type,
-        message: classified.message,
-        canRetry: classified.canRetry,
-      });
+        revalidatePath(`/entries/${entryId}`);
+        revalidatePath("/");
 
+        actionLogger.info("AI analysis succeeded", { 
+          ...context, 
+          themes: result.themes,
+          sentiment: result.sentiment.label,
+        });
+
+        return { success: true, data: undefined };
+      } catch (aiError) {
+        // Classify the error for better handling
+        const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+        
+        // Store the user-friendly error message
+        await updateEntryAI(entryId, {
+          aiStatus: "failed",
+          aiError: classified.userMessage,
+        });
+
+        revalidatePath(`/entries/${entryId}`);
+
+        actionLogger.error("AI analysis failed", aiError, {
+          ...context,
+          errorType: classified.type,
+          canRetry: classified.canRetry,
+        });
+
+        return { 
+          success: false, 
+          error: classified.userMessage,
+          errorType: classified.type,
+          canRetry: classified.canRetry,
+          retryAfter: classified.retryAfter,
+        };
+      }
+    } catch (error) {
+      actionLogger.error("Fatal error in processEntryAI", error, context);
       return { 
         success: false, 
-        error: classified.userMessage,
-        errorType: classified.type,
-        canRetry: classified.canRetry,
-        retryAfter: classified.retryAfter,
+        error: error instanceof Error ? error.message : "Failed to process AI analysis" 
       };
     }
-  } catch (error) {
-    console.error("Error in processEntryAI:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Failed to process AI analysis" 
-    };
-  }
+  });
 }
 
 /**
@@ -134,77 +148,100 @@ export async function generateInsight(
   startDate: string,
   endDate: string
 ): Promise<ActionResult<{ insightId: string }>> {
-  try {
-    // Get entries for the date range
-    const entries = await getEntriesByDateRange(startDate, endDate);
+  const context = { 
+    action: "generateInsight", 
+    insightType, 
+    startDate, 
+    endDate 
+  };
 
-    if (entries.length === 0) {
-      return {
-        success: false,
-        error: `No entries found between ${startDate} and ${endDate}`,
-      };
-    }
-
-    // Create insight record
-    const insightId = randomBytes(16).toString("hex");
-    await createInsight(insightId, insightType, startDate, endDate);
-
-    // Update to processing
-    await updateInsightAI(insightId, {
-      aiStatus: "processing",
-    });
-
-    revalidatePath("/insights");
-
-    // Generate the batch insight
+  return actionLogger.time(`Generate ${insightType} Insight`, async () => {
     try {
-      const result = await generateBatchInsight(entries, insightType);
+      // Get entries for the date range
+      const entries = await getEntriesByDateRange(startDate, endDate);
 
-      // Store the results
+      if (entries.length === 0) {
+        actionLogger.warn("No entries in date range", context);
+        return {
+          success: false,
+          error: `No entries found between ${startDate} and ${endDate}`,
+        };
+      }
+
+      actionLogger.info("Starting batch insight generation", { 
+        ...context, 
+        entryCount: entries.length 
+      });
+
+      // Create insight record
+      const insightId = randomBytes(16).toString("hex");
+      await createInsight(insightId, insightType, startDate, endDate);
+
+      // Update to processing
       await updateInsightAI(insightId, {
-        aiStatus: "success",
-        content: result.content,
-        themes: result.themes,
-        sentimentTrend: result.sentimentTrend,
-        aiError: null,
+        aiStatus: "processing",
       });
 
       revalidatePath("/insights");
 
-      return { success: true, data: { insightId } };
-    } catch (aiError) {
-      // Classify the error
-      const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+      // Generate the batch insight
+      try {
+        const result = await generateBatchInsight(entries, insightType);
 
-      // Store the error
-      await updateInsightAI(insightId, {
-        aiStatus: "failed",
-        aiError: classified.userMessage,
-      });
+        // Store the results
+        await updateInsightAI(insightId, {
+          aiStatus: "success",
+          content: result.content,
+          themes: result.themes,
+          sentimentTrend: result.sentimentTrend,
+          aiError: null,
+        });
 
-      revalidatePath("/insights");
+        revalidatePath("/insights");
 
-      console.error("Batch insight generation failed:", {
-        type: classified.type,
-        message: classified.message,
-        canRetry: classified.canRetry,
-      });
+        actionLogger.info("Batch insight generated successfully", {
+          ...context,
+          insightId,
+          themes: result.themes,
+          trajectory: result.sentimentTrend.trajectory,
+        });
 
+        return { success: true, data: { insightId } };
+      } catch (aiError) {
+        // Classify the error
+        const classified: ClassifiedError = (aiError as any).classified || classifyAIError(aiError);
+
+        // Store the error
+        await updateInsightAI(insightId, {
+          aiStatus: "failed",
+          aiError: classified.userMessage,
+        });
+
+        revalidatePath("/insights");
+
+        actionLogger.error("Batch insight generation failed", aiError, {
+          ...context,
+          insightId,
+          errorType: classified.type,
+          canRetry: classified.canRetry,
+        });
+
+        return {
+          success: false,
+          error: classified.userMessage,
+          errorType: classified.type,
+          canRetry: classified.canRetry,
+          retryAfter: classified.retryAfter,
+        };
+      }
+    } catch (error) {
+      actionLogger.error("Fatal error in generateInsight", error, context);
       return {
         success: false,
-        error: classified.userMessage,
-        errorType: classified.type,
-        canRetry: classified.canRetry,
-        retryAfter: classified.retryAfter,
+        error: error instanceof Error ? error.message : "Failed to generate insight"
       };
     }
-  } catch (error) {
-    console.error("Error in generateInsight:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to generate insight"
-    };
-  }
+  });
 }
 
 /**

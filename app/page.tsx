@@ -1,8 +1,14 @@
 import { getRecentEntries } from "@/lib/db/queries";
 import { EntryList } from "@/components/EntryList";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Your Journal - Hey Bagel",
+  description: "View and manage your private journal entries with AI-powered insights.",
+};
 
 export default async function HomePage() {
   const entries = await getRecentEntries(20);
