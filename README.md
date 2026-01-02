@@ -1,172 +1,147 @@
 # Hey Bagel 🥯
 
-A minimalist, private journaling app with AI-powered insights.
+A private, AI-powered journaling app that helps you reflect, grow, and discover patterns in your thoughts.
 
-## Phase 1 Complete ✅
+## Features
 
-This implementation includes the foundation for Hey Bagel:
+- 📝 **Private Journaling** - Write daily entries with mood tracking
+- 🤖 **AI Analysis** - Get instant summaries, sentiment analysis, and themes (GPT-4o-mini)
+- 📊 **Longitudinal Insights** - Weekly and monthly reflections on your journey (GPT-4o)
+- 🎨 **Beautiful UI** - Calm, minimal design focused on your writing
+- ⌨️ **Keyboard Shortcuts** - Fast navigation (press `?` to see all shortcuts)
+- ♿ **Accessible** - ARIA labels, keyboard navigation, error boundaries
 
-### What's Built
+## Tech Stack
 
-- **Database Layer**: SQLite with better-sqlite3
-  - Schema with entries table
-  - CRUD query functions
-  - Automatic migrations on startup
-
-- **Entry Management**:
-  - Create journal entries
-  - View all entries (home page)
-  - View individual entry details
-  - Optional mood tracking (positive, neutral, negative, mixed)
-
-- **Server Actions**:
-  - `createEntry` - Save new entries
-  - `updateEntry` - Modify existing entries
-  - `deleteEntry` - Remove entries
-  - Proper revalidation after mutations
-
-- **UI Components**:
-  - EntryForm (client component with form state)
-  - EntryList (server component for listing)
-  - EntryCard (preview cards with mood indicators)
-  - EntryDetail (full entry view)
-
-- **Pages**:
-  - Home page (entry list)
-  - New entry page (form)
-  - Entry detail page (single entry view)
-  - Responsive layout with minimal design
-
-### Tech Stack
-
-- Next.js 15 (App Router)
-- React 19
-- TypeScript
-- Tailwind CSS
-- SQLite (better-sqlite3)
-- Zod (validation)
-- date-fns (date formatting)
+- **Framework:** Next.js 15 (App Router)
+- **Database:** SQLite with better-sqlite3
+- **AI:** OpenAI GPT-4o-mini & GPT-4o
+- **Styling:** Tailwind CSS
+- **Validation:** Zod
+- **TypeScript:** Strict mode
 
 ## Getting Started
 
-1. **Install dependencies** (already done):
-   ```bash
-   npm install
-   ```
+### Prerequisites
 
-2. **Run development server**:
-   ```bash
-   npm run dev
-   ```
+- Node.js 18+
+- OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 
-3. **Open your browser**:
-   Navigate to [http://localhost:3000](http://localhost:3000)
+### Installation
 
-4. **Start journaling**:
-   - Click "New Entry" to create your first journal entry
-   - Write freely and optionally select a mood
-   - View your entries on the home page
-   - Click any entry to see the full details
+```bash
+# Clone the repository
+git clone https://github.com/kykan1/HeyBagel.git
+cd HeyBagel
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp env.example .env.local
+# Edit .env.local and add your OPENAI_API_KEY
+
+# Run the development server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to start journaling!
+
+### Environment Variables
+
+```env
+OPENAI_API_KEY=sk-...    # Required
+DATABASE_PATH=./data/heybagel.db  # Optional (defaults to ./data/heybagel.db)
+```
+
+## Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+
+**Quick Deploy (Recommended):**
+1. Push to GitHub
+2. Deploy to [Railway](https://railway.app) (supports SQLite)
+3. Add `OPENAI_API_KEY` environment variable
+4. Done! 🎉
+
+**Note:** Vercel doesn't support better-sqlite3. Use Railway, Render, or Fly.io instead.
 
 ## Project Structure
 
 ```
-HeyBagel/
-├── app/                      # Next.js App Router pages
-│   ├── entries/
-│   │   ├── new/             # New entry form page
-│   │   └── [id]/            # Single entry detail page
-│   ├── layout.tsx           # Root layout with header
-│   ├── page.tsx             # Home page (entry list)
-│   └── globals.css          # Global styles
-├── components/              # React components
-│   ├── EntryCard.tsx       # Entry preview card
-│   ├── EntryDetail.tsx     # Full entry display
-│   ├── EntryForm.tsx       # Entry creation/edit form
-│   └── EntryList.tsx       # List of entry cards
-├── lib/                     # Core library code
-│   ├── db/
-│   │   ├── client.ts       # SQLite connection
-│   │   ├── schema.ts       # Database migrations
-│   │   └── queries.ts      # Database queries
-│   └── utils/
-│       ├── date.ts         # Date formatting utilities
-│       └── validation.ts   # Zod schemas
-├── actions/                 # Server Actions
-│   └── entry-actions.ts    # Entry CRUD actions
-├── types/                   # TypeScript types
-│   └── index.ts            # Shared types
-├── data/                    # Database storage (created on first run)
-│   └── heybagel.db         # SQLite database file
-└── PLAN.md                 # Full implementation plan
+├── app/                    # Next.js App Router pages
+│   ├── page.tsx           # Home (entry list)
+│   ├── entries/           # Entry routes
+│   │   ├── new/          # Create entry
+│   │   └── [id]/         # View/edit entry
+│   └── insights/         # Weekly/monthly insights
+├── actions/               # Server Actions (mutations)
+├── components/            # React components
+├── lib/
+│   ├── ai/               # OpenAI integration
+│   ├── db/               # SQLite database
+│   └── utils/            # Utilities (validation, dates, logger)
+└── types/                # TypeScript types
 ```
 
-## Database
+## Architecture Principles
 
-The SQLite database is automatically created at `./data/heybagel.db` on first run.
+1. **Server Components by Default** - Client Components only for interactivity
+2. **Server Actions for Writes** - No client-side fetch for mutations
+3. **AI Never Blocks** - Entry saves return immediately; AI runs asynchronously
+4. **Explicit AI State** - UI always reflects real backend state
+5. **Fail Gracefully** - AI errors don't break core journaling UX
 
-### Entries Table Schema
+## Development
 
-- `id` - Unique entry identifier
-- `user_id` - User identifier (currently "default_user")
-- `date` - Entry date (ISO 8601)
-- `content` - Journal entry text
-- `mood` - Optional mood (positive/neutral/negative/mixed)
-- `ai_summary` - AI-generated summary (Phase 2)
-- `ai_sentiment` - AI sentiment analysis (Phase 2)
-- `ai_themes` - AI-extracted themes (Phase 2)
-- `ai_status` - AI processing status (Phase 2)
-- `ai_error` - AI error messages (Phase 2)
-- `created_at` - Creation timestamp
-- `updated_at` - Last update timestamp
+```bash
+# Run dev server
+npm run dev
 
-## What's NOT Built Yet
+# Build for production
+npm run build
 
-Phase 1 intentionally excludes AI features. These will be added in Phase 2:
+# Start production server
+npm start
 
-- ❌ AI summaries for entries
-- ❌ AI sentiment analysis
-- ❌ AI theme extraction
-- ❌ Weekly/monthly insights
-- ❌ AI error handling and retry logic
+# Lint
+npm run lint
+```
 
-Also deferred:
-- Authentication (single-user mode for now)
-- Entry editing UI
-- Entry deletion UI
+## Keyboard Shortcuts
+
+- `n` - New entry
+- `i` - View insights
+- `h` - Go home
+- `?` - Show all shortcuts
+
+## MVP Status
+
+✅ **Phase 1:** Core journaling (CRUD, mood tracking)
+✅ **Phase 2:** AI integration (single entry analysis)
+✅ **Phase 3:** Longitudinal insights (weekly/monthly)
+✅ **Phase 4:** Polish (empty states, validation, loading states)
+
+**The MVP is complete!** 🎉
+
+## Future Enhancements (Deferred)
+
+See [PLAN.md](./PLAN.md) for the full roadmap. Deferred features include:
+- Authentication (multi-user)
 - Search functionality
-- Pagination
+- Export/backup
+- Mood trends visualization
+- Tags/categories
+- Mobile app
 
-## Next Steps
+## License
 
-See `PLAN.md` for the complete implementation plan, including:
-- Phase 2: AI Integration
-- Phase 3: Batch Insights
-- Phase 4: Polish & Edge Cases
+Private project - All rights reserved
 
-## Architecture Highlights
+## Contact
 
-✅ **Server Components by Default**: All pages are Server Components for optimal performance
-
-✅ **Server Actions for Mutations**: No client-side fetch; all writes use Server Actions
-
-✅ **Caching & Revalidation**: Proper cache invalidation after mutations
-
-✅ **Type Safety**: Full TypeScript coverage with strict mode
-
-✅ **Data-First Design**: Database writes succeed before any other processing
-
-✅ **Ready for AI**: Schema includes AI fields (pending state), ready for Phase 2
-
-## Development Notes
-
-- Database migrations run automatically on app start
-- Default user ID is `"default_user"` (will be replaced in auth phase)
-- All routes are force-dynamic to ensure fresh data during development
-- The app uses a calm, minimal design aesthetic
-- No external dependencies for styling (pure Tailwind)
+Kyle - [@kykan1](https://github.com/kykan1)
 
 ---
 
-Built with ❤️ as a learning-first project.
-
+**Built with ❤️ for personal reflection and growth**
