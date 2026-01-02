@@ -1,18 +1,39 @@
+/**
+ * Entry Analysis Module
+ * 
+ * Uses GPT-4o-mini to analyze individual journal entries.
+ * Extracts summary, sentiment, and themes from entry content.
+ * 
+ * Cost: ~$0.001 per entry
+ * Timeout: 30 seconds
+ */
+
 import { getOpenAI } from "./client";
 import type { AISentiment } from "@/types";
 import { validateEntryContent, classifyAIError } from "./errors";
 
+/**
+ * Result of AI analysis on a single entry
+ */
 export interface EntryAnalysisResult {
   summary: string;
   sentiment: AISentiment;
   themes: string[];
 }
 
-// Timeout for AI requests (30 seconds)
+/**
+ * Timeout for AI requests (30 seconds)
+ * Prevents hanging requests and controls costs
+ */
 const AI_TIMEOUT_MS = 30000;
 
 /**
  * Wraps a promise with a timeout
+ * Rejects if the promise doesn't resolve within the specified time
+ * 
+ * @param promise - Promise to wrap
+ * @param timeoutMs - Timeout in milliseconds
+ * @returns Promise that rejects on timeout
  */
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
@@ -27,8 +48,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 /**
- * Analyzes a journal entry using OpenAI GPT-4o-mini
- * Returns summary, sentiment, and themes
+ * Analyze a journal entry using OpenAI GPT-4o-mini
+ * 
+ * Extracts:
+ * - Summary: 2-3 sentence overview
+ * - Sentiment: Score (-1 to 1) and label
+ * - Themes: 3-5 key topics
+ * 
+ * @param content - Journal entry text (10-10,000 characters)
+ * @returns Analysis result with summary, sentiment, and themes
+ * @throws {Error} If content is invalid or AI request fails
+ * 
+ * @example
+ * const result = await analyzeEntry("Today was amazing...");
+ * // { summary: "...", sentiment: { score: 0.8, label: "positive" }, themes: ["joy", "gratitude"] }
  */
 export async function analyzeEntry(content: string): Promise<EntryAnalysisResult> {
   // Validate content before sending

@@ -3,8 +3,14 @@ import { InsightCard } from "@/components/InsightCard";
 import { OlderInsightsSection } from "@/components/OlderInsightsSection";
 import { GenerateInsightButton } from "@/components/GenerateInsightButton";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Insights - Hey Bagel",
+  description: "View AI-powered weekly and monthly reflections on your journaling journey.",
+};
 
 export default async function InsightsPage() {
   const allInsights = await getAllInsights();

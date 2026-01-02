@@ -1,6 +1,12 @@
 import { EntryForm } from "@/components/EntryForm";
 import { createEntryAndRedirect } from "@/actions/entry-actions";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "New Entry - Hey Bagel",
+  description: "Write a new journal entry and receive AI-powered insights.",
+};
 
 export default function NewEntryPage() {
   return (

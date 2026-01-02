@@ -22,19 +22,43 @@ const aiStatusIcon: Record<string, string> = {
 
 export function EntryCard({ entry }: EntryCardProps) {
   const preview = entry.content.slice(0, 150) + (entry.content.length > 150 ? "..." : "");
+  const aiStatusLabel = {
+    pending: "AI analysis pending",
+    processing: "AI analyzing",
+    success: "AI analysis complete",
+    failed: "AI analysis failed",
+  }[entry.aiStatus];
 
   return (
-    <Link href={`/entries/${entry.id}`}>
-      <article className="block p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors cursor-pointer">
+    <Link 
+      href={`/entries/${entry.id}`}
+      aria-label={`View entry from ${formatDate(entry.date)}`}
+    >
+      <article className="block p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-gray-900 focus-within:ring-offset-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <time className="text-sm text-gray-500">{formatDate(entry.date)}</time>
-            <span className="text-xs" title={`AI: ${entry.aiStatus}`}>
+            <time 
+              className="text-sm text-gray-500"
+              dateTime={entry.date}
+            >
+              {formatDate(entry.date)}
+            </time>
+            <span 
+              className="text-xs" 
+              role="status"
+              aria-label={aiStatusLabel}
+              title={aiStatusLabel}
+            >
               {aiStatusIcon[entry.aiStatus]}
             </span>
           </div>
           {entry.mood && (
-            <span className="text-xl" title={entry.mood}>
+            <span 
+              className="text-xl" 
+              role="img"
+              aria-label={`Mood: ${entry.mood}`}
+              title={`Mood: ${entry.mood}`}
+            >
               {moodEmoji[entry.mood]}
             </span>
           )}

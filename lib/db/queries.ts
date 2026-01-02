@@ -1,7 +1,17 @@
+/**
+ * Database Query Functions
+ * 
+ * Provides type-safe CRUD operations for entries and insights.
+ * All queries use parameterized statements to prevent SQL injection.
+ */
+
 import { getDb } from "./client";
 import type { Entry, AISentiment, AIStatus, Mood, Insight, InsightType, SentimentTrend } from "@/types";
 
-// Helper to convert DB row to Entry type
+/**
+ * Convert database row to Entry type
+ * Handles JSON parsing for complex fields
+ */
 function rowToEntry(row: any): Entry {
   return {
     id: row.id,
@@ -19,7 +29,10 @@ function rowToEntry(row: any): Entry {
   };
 }
 
-// Helper to convert DB row to Insight type
+/**
+ * Convert database row to Insight type
+ * Handles JSON parsing for themes and sentiment trend
+ */
 function rowToInsight(row: any): Insight {
   return {
     id: row.id,
@@ -37,6 +50,12 @@ function rowToInsight(row: any): Insight {
   };
 }
 
+/**
+ * Get all entries for a user, sorted by date (newest first)
+ * 
+ * @param userId - User ID (defaults to "default_user" for MVP)
+ * @returns Array of entries
+ */
 export function getAllEntries(userId: string = "default_user"): Entry[] {
   const db = getDb();
   const stmt = db.prepare(`
@@ -48,6 +67,13 @@ export function getAllEntries(userId: string = "default_user"): Entry[] {
   return rows.map(rowToEntry);
 }
 
+/**
+ * Get recent entries with pagination
+ * 
+ * @param limit - Maximum number of entries to return
+ * @param userId - User ID
+ * @returns Array of recent entries
+ */
 export function getRecentEntries(limit: number = 20, userId: string = "default_user"): Entry[] {
   const db = getDb();
   const stmt = db.prepare(`
@@ -60,6 +86,13 @@ export function getRecentEntries(limit: number = 20, userId: string = "default_u
   return rows.map(rowToEntry);
 }
 
+/**
+ * Get a single entry by ID
+ * 
+ * @param id - Entry ID
+ * @param userId - User ID
+ * @returns Entry or null if not found
+ */
 export function getEntryById(id: string, userId: string = "default_user"): Entry | null {
   const db = getDb();
   const stmt = db.prepare(`
@@ -70,6 +103,16 @@ export function getEntryById(id: string, userId: string = "default_user"): Entry
   return row ? rowToEntry(row) : null;
 }
 
+/**
+ * Create a new journal entry
+ * 
+ * @param id - Unique entry ID (UUID)
+ * @param content - Entry content (journal text)
+ * @param date - ISO date string (YYYY-MM-DD)
+ * @param mood - Optional mood indicator
+ * @param userId - User ID
+ * @returns Created entry
+ */
 export function createEntry(
   id: string,
   content: string,

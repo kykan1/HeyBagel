@@ -4,6 +4,8 @@ import type { Entry } from "@/types";
 import { formatDate } from "@/lib/utils/date";
 import { AIStatusBadge } from "./AIStatusBadge";
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface EntryDetailProps {
   entry: Entry;
@@ -31,12 +33,26 @@ export function EntryDetail({ entry }: EntryDetailProps) {
       <header className="mb-6 border-b border-gray-200 pb-4">
         <div className="flex items-center justify-between mb-3">
           <time className="text-gray-500">{formatDate(entry.date)}</time>
-          {entry.mood && (
+          <div className="flex items-center gap-3">
+            {entry.mood && (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{moodEmoji[entry.mood]}</span>
+                <span className="text-sm text-gray-600 capitalize">{entry.mood}</span>
+              </div>
+            )}
+            {/* Action buttons */}
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{moodEmoji[entry.mood]}</span>
-              <span className="text-sm text-gray-600 capitalize">{entry.mood}</span>
+              <Link
+                href={`/entries/${entry.id}/edit`}
+                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1.5 font-medium"
+                title="Edit this entry"
+              >
+                <span>✏️</span>
+                Edit
+              </Link>
+              <DeleteButton entryId={entry.id} />
             </div>
-          )}
+          </div>
         </div>
         <AIStatusBadge status={entry.aiStatus} />
       </header>
@@ -60,6 +76,74 @@ export function EntryDetail({ entry }: EntryDetailProps) {
         Created {new Date(entry.createdAt).toLocaleString()}
       </footer>
     </article>
+  );
+}
+
+/**
+ * Delete Button with Confirmation
+ * Shows inline confirmation before deleting
+ */
+function DeleteButton({ entryId }: { entryId: string }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/entries/${entryId}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        // Redirect to home after successful deletion
+        router.push("/");
+        router.refresh();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to delete entry. Please try again.");
+        setIsDeleting(false);
+        setShowConfirm(false);
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete entry. Please try again.");
+      setIsDeleting(false);
+      setShowConfirm(false);
+    }
+  };
+
+  if (showConfirm) {
+    return (
+      <div className="flex items-center gap-2 bg-red-50 border-2 border-red-300 rounded-lg px-3 py-1.5 animate-pulse">
+        <span className="text-sm text-red-900 font-semibold">Delete forever?</span>
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="px-3 py-1 text-xs bg-red-600 text-white rounded font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isDeleting ? "Deleting..." : "Yes, Delete"}
+        </button>
+        <button
+          onClick={() => setShowConfirm(false)}
+          disabled={isDeleting}
+          className="px-3 py-1 text-xs bg-white text-gray-700 border border-gray-300 rounded font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setShowConfirm(true)}
+      className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1.5 font-medium"
+      title="Delete this entry permanently"
+    >
+      <span>🗑️</span>
+      Delete
+    </button>
   );
 }
 

@@ -7,6 +7,7 @@ import { createEntry as dbCreateEntry, updateEntry as dbUpdateEntry, deleteEntry
 import { createEntrySchema, updateEntrySchema } from "@/lib/utils/validation";
 import { getTodayISO } from "@/lib/utils/date";
 import { randomUUID } from "crypto";
+import { actionLogger } from "@/lib/utils/logger";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -15,45 +16,54 @@ type ActionResult<T = void> =
 export async function createEntry(
   formData: FormData
 ): Promise<ActionResult<{ entryId: string }>> {
-  try {
-    // Parse form data
-    const rawData = {
-      content: formData.get("content") as string,
-      mood: formData.get("mood") as string | null,
-      date: formData.get("date") as string | null,
-    };
+  return actionLogger.time("Create Entry", async () => {
+    try {
+      // Parse form data
+      const rawData = {
+        content: formData.get("content") as string,
+        mood: formData.get("mood") as string | null,
+        date: formData.get("date") as string | null,
+      };
 
-    // Validate
-    const validatedData = createEntrySchema.parse({
-      content: rawData.content,
-      mood: rawData.mood || undefined,
-      date: rawData.date || undefined,
-    });
+      // Validate
+      const validatedData = createEntrySchema.parse({
+        content: rawData.content,
+        mood: rawData.mood || undefined,
+        date: rawData.date || undefined,
+      });
 
-    // Create entry
-    const entryId = randomUUID();
-    const date = validatedData.date || getTodayISO();
-    
-    await dbCreateEntry(
-      entryId,
-      validatedData.content,
-      date,
-      validatedData.mood ?? null
-    );
+      // Create entry
+      const entryId = randomUUID();
+      const date = validatedData.date || getTodayISO();
+      
+      await dbCreateEntry(
+        entryId,
+        validatedData.content,
+        date,
+        validatedData.mood ?? null
+      );
 
-    // Revalidate home page
-    revalidatePath("/");
-    revalidatePath(`/entries/${entryId}`);
+      // Revalidate home page
+      revalidatePath("/");
+      revalidatePath(`/entries/${entryId}`);
 
-    return { success: true, data: { entryId } };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      actionLogger.info("Entry created successfully", { 
+        entryId, 
+        mood: validatedData.mood,
+        contentLength: validatedData.content.length,
+      });
+
+      return { success: true, data: { entryId } };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        actionLogger.warn("Validation failed", { error: error.errors });
+        return { success: false, error: error.errors[0].message };
+      }
+      
+      actionLogger.error("Failed to create entry", error);
+      return { success: false, error: "Failed to create entry. Please try again." };
     }
-    
-    console.error("Error creating entry:", error);
-    return { success: false, error: "Failed to create entry. Please try again." };
-  }
+  });
 }
 
 export async function createEntryAndRedirect(formData: FormData): Promise<void> {
@@ -72,51 +82,66 @@ export async function updateEntry(
   entryId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  try {
-    const rawData = {
-      content: formData.get("content") as string | null,
-      mood: formData.get("mood") as string | null,
-    };
+  return actionLogger.time("Update Entry", async () => {
+    try {
+      const rawData = {
+        content: formData.get("content") as string | null,
+        mood: formData.get("mood") as string | null,
+      };
 
-    const validatedData = updateEntrySchema.parse({
-      content: rawData.content || undefined,
-      mood: rawData.mood === "" ? null : rawData.mood || undefined,
-    });
+      const validatedData = updateEntrySchema.parse({
+        content: rawData.content || undefined,
+        mood: rawData.mood === "" ? null : rawData.mood || undefined,
+      });
 
-    const updated = await dbUpdateEntry(entryId, validatedData);
+      const updated = await dbUpdateEntry(entryId, validatedData);
 
-    if (!updated) {
-      return { success: false, error: "Entry not found" };
+      if (!updated) {
+        actionLogger.warn("Entry not found for update", { entryId });
+        return { success: false, error: "Entry not found" };
+      }
+
+      revalidatePath("/");
+      revalidatePath(`/entries/${entryId}`);
+
+      actionLogger.info("Entry updated successfully", { 
+        entryId,
+        mood: validatedData.mood,
+        contentLength: validatedData.content?.length,
+      });
+
+      return { success: true, data: undefined };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        actionLogger.warn("Validation failed on update", { entryId, error: error.errors });
+        return { success: false, error: error.errors[0].message };
+      }
+      
+      actionLogger.error("Failed to update entry", error, { entryId });
+      return { success: false, error: "Failed to update entry. Please try again." };
     }
-
-    revalidatePath("/");
-    revalidatePath(`/entries/${entryId}`);
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
-    }
-    
-    console.error("Error updating entry:", error);
-    return { success: false, error: "Failed to update entry. Please try again." };
-  }
+  });
 }
 
 export async function deleteEntryAction(entryId: string): Promise<ActionResult> {
-  try {
-    const deleted = await dbDeleteEntry(entryId);
+  return actionLogger.time("Delete Entry", async () => {
+    try {
+      const deleted = await dbDeleteEntry(entryId);
 
-    if (!deleted) {
-      return { success: false, error: "Entry not found" };
+      if (!deleted) {
+        actionLogger.warn("Entry not found for deletion", { entryId });
+        return { success: false, error: "Entry not found" };
+      }
+
+      revalidatePath("/");
+
+      actionLogger.info("Entry deleted successfully", { entryId });
+
+      return { success: true, data: undefined };
+    } catch (error) {
+      actionLogger.error("Failed to delete entry", error, { entryId });
+      return { success: false, error: "Failed to delete entry. Please try again." };
     }
-
-    revalidatePath("/");
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    console.error("Error deleting entry:", error);
-    return { success: false, error: "Failed to delete entry. Please try again." };
-  }
+  });
 }
 
