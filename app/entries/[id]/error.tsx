@@ -10,6 +10,7 @@ import { logger } from "@/lib/utils/logger";
 export default function EntryError({
   error,
   reset,
+  
 }: {
   error: Error & { digest?: string };
   reset: () => void;

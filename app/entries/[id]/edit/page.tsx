@@ -14,7 +14,8 @@ interface EditEntryPageProps {
 
 export async function generateMetadata({ params }: EditEntryPageProps): Promise<Metadata> {
   const { id } = await params;
-  const entry = await getEntryById(id);
+  const userId = "default_user"; // TODO: Replace with session.user.id after auth
+  const entry = await getEntryById(id, userId);
 
   if (!entry) {
     return {
@@ -31,7 +32,8 @@ export async function generateMetadata({ params }: EditEntryPageProps): Promise<
 
 export default async function EditEntryPage({ params }: EditEntryPageProps) {
   const { id } = await params;
-  const entry = await getEntryById(id);
+  const userId = "default_user"; // TODO: Replace with session.user.id after auth
+  const entry = await getEntryById(id, userId);
 
   if (!entry) {
     notFound();

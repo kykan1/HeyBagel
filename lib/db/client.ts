@@ -1,86 +1,101 @@
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
+/**
+ * Database Client (Postgres)
+ * 
+ * Manages connection to Neon Postgres database with connection pooling.
+ * Uses the 'postgres' library for lightweight, Vercel-compatible connections.
+ */
 
-let db: Database.Database | null = null;
+import postgres from "postgres";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+let sql: ReturnType<typeof postgres> | null = null;
 let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
-function initializeDatabase(): void {
-  if (isInitialized) return;
+/**
+ * Get or create Postgres connection
+ * Uses connection pooling for efficiency
+ */
+export function getDb(): ReturnType<typeof postgres> {
+  if (sql) {
+    return sql;
+  }
 
-  const database = getDb();
-
-  // Run migrations
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS entries (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'default_user',
-      date TEXT NOT NULL,
-      content TEXT NOT NULL,
-      mood TEXT,
-      ai_summary TEXT,
-      ai_sentiment TEXT,
-      ai_themes TEXT,
-      ai_status TEXT NOT NULL DEFAULT 'pending',
-      ai_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+  const connectionString = process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL environment variable is not set. " +
+      "Add your Neon Postgres connection string to .env.local"
     );
-
-    CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date DESC);
-    CREATE INDEX IF NOT EXISTS idx_entries_ai_status ON entries(ai_status);
-    CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, date DESC);
-
-    CREATE TABLE IF NOT EXISTS insights (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'default_user',
-      insight_type TEXT NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT NOT NULL,
-      content TEXT,
-      themes TEXT,
-      sentiment_trend TEXT,
-      ai_status TEXT NOT NULL DEFAULT 'pending',
-      ai_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_insights_date ON insights(start_date DESC);
-    CREATE INDEX IF NOT EXISTS idx_insights_user_date ON insights(user_id, start_date DESC);
-  `);
-
-  isInitialized = true;
-  console.log("Database initialized successfully");
-}
-
-export function getDb(): Database.Database {
-  if (db) {
-    return db;
   }
 
-  const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "heybagel.db");
-  const dbDir = path.dirname(dbPath);
+  // Create connection with pooling
+  sql = postgres(connectionString, {
+    max: 10, // Maximum 10 connections in pool
+    idle_timeout: 20, // Close idle connections after 20s
+    connect_timeout: 10, // Timeout connection attempts after 10s
+    prepare: true, // Use prepared statements for performance
+  });
 
-  // Ensure the directory exists
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
+  console.log("✅ Postgres connection established");
 
-  db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-
-  // Initialize database schema
-  initializeDatabase();
-
-  return db;
+  return sql;
 }
 
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
+/**
+ * Initialize database schema
+ * Runs migrations from schema.sql file
+ * Safe to call multiple times - uses CREATE IF NOT EXISTS
+ */
+async function runSchemaInit(): Promise<void> {
+  if (isInitialized) {
+    return;
+  }
+
+  try {
+    const sql = getDb();
+    const schemaPath = join(process.cwd(), "lib/db/schema.sql");
+    const schema = readFileSync(schemaPath, "utf-8");
+    
+    // Run schema (idempotent - uses CREATE IF NOT EXISTS)
+    await sql.unsafe(schema);
+    
+    isInitialized = true;
+    console.log("✅ Database schema initialized");
+  } catch (error) {
+    console.error("❌ Failed to initialize database schema:", error);
+    throw error;
   }
 }
 
+/**
+ * Ensure database schema is initialized
+ * Returns a promise that resolves when initialization is complete
+ * Multiple calls return the same promise (no duplicate initialization)
+ */
+export function ensureInitialized(): Promise<void> {
+  if (isInitialized) {
+    return Promise.resolve();
+  }
+
+  if (!initPromise) {
+    initPromise = runSchemaInit();
+  }
+
+  return initPromise;
+}
+
+/**
+ * Close database connection
+ * Call this during graceful shutdown
+ */
+export async function closeDb(): Promise<void> {
+  if (sql) {
+    await sql.end({ timeout: 5 });
+    sql = null;
+    isInitialized = false;
+    console.log("🔌 Database connection closed");
+  }
+}
