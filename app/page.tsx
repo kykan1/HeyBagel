@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const entries = await getRecentEntries(20);
+  const userId = "default_user"; // TODO: Replace with session.user.id after auth
+  const entries = await getRecentEntries(20, userId);
 
   return (
     <div>

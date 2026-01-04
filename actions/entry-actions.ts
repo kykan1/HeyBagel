@@ -35,12 +35,14 @@ export async function createEntry(
       // Create entry
       const entryId = randomUUID();
       const date = validatedData.date || getTodayISO();
+      const userId = "default_user"; // TODO: Replace with session.user.id after auth
       
       await dbCreateEntry(
         entryId,
         validatedData.content,
         date,
-        validatedData.mood ?? null
+        validatedData.mood ?? null,
+        userId
       );
 
       // Revalidate home page
@@ -94,7 +96,8 @@ export async function updateEntry(
         mood: rawData.mood === "" ? null : rawData.mood || undefined,
       });
 
-      const updated = await dbUpdateEntry(entryId, validatedData);
+      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      const updated = await dbUpdateEntry(entryId, validatedData, userId);
 
       if (!updated) {
         actionLogger.warn("Entry not found for update", { entryId });
@@ -126,7 +129,8 @@ export async function updateEntry(
 export async function deleteEntryAction(entryId: string): Promise<ActionResult> {
   return actionLogger.time("Delete Entry", async () => {
     try {
-      const deleted = await dbDeleteEntry(entryId);
+      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      const deleted = await dbDeleteEntry(entryId, userId);
 
       if (!deleted) {
         actionLogger.warn("Entry not found for deletion", { entryId });

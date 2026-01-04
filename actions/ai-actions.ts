@@ -31,8 +31,10 @@ export async function processEntryAI(
 
   return actionLogger.time("Process Entry AI", async () => {
     try {
+      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      
       // Get the entry
-      const entry = await getEntryById(entryId);
+      const entry = await getEntryById(entryId, userId);
 
       if (!entry) {
         actionLogger.warn("Entry not found", context);
@@ -44,7 +46,7 @@ export async function processEntryAI(
       // Update status to processing
       await updateEntryAI(entryId, {
         aiStatus: "processing",
-      });
+      }, userId);
 
       // Note: No revalidatePath here - it causes errors during render phase
       // We only revalidate after AI completes (success or failure)
@@ -60,7 +62,7 @@ export async function processEntryAI(
           aiSentiment: result.sentiment,
           aiThemes: result.themes,
           aiError: null,
-        });
+        }, userId);
 
         revalidatePath(`/entries/${entryId}`);
         revalidatePath("/");
@@ -80,7 +82,7 @@ export async function processEntryAI(
         await updateEntryAI(entryId, {
           aiStatus: "failed",
           aiError: classified.userMessage,
-        });
+        }, userId);
 
         revalidatePath(`/entries/${entryId}`);
 
@@ -121,11 +123,13 @@ export async function retryAIAnalysis(entryId: string): Promise<ActionResult> {
  */
 export async function regenerateAIAnalysis(entryId: string): Promise<ActionResult> {
   try {
+    const userId = "default_user"; // TODO: Replace with session.user.id after auth
+    
     // Reset to pending first
     await updateEntryAI(entryId, {
       aiStatus: "pending",
       aiError: null,
-    });
+    }, userId);
 
     // No revalidatePath here - processEntryAI will handle it at the end
 
@@ -157,8 +161,10 @@ export async function generateInsight(
 
   return actionLogger.time(`Generate ${insightType} Insight`, async () => {
     try {
+      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      
       // Get entries for the date range
-      const entries = await getEntriesByDateRange(startDate, endDate);
+      const entries = await getEntriesByDateRange(startDate, endDate, userId);
 
       if (entries.length === 0) {
         actionLogger.warn("No entries in date range", context);
@@ -175,12 +181,12 @@ export async function generateInsight(
 
       // Create insight record
       const insightId = randomBytes(16).toString("hex");
-      await createInsight(insightId, insightType, startDate, endDate);
+      await createInsight(insightId, insightType, startDate, endDate, userId);
 
       // Update to processing
       await updateInsightAI(insightId, {
         aiStatus: "processing",
-      });
+      }, userId);
 
       revalidatePath("/insights");
 
@@ -195,7 +201,7 @@ export async function generateInsight(
           themes: result.themes,
           sentimentTrend: result.sentimentTrend,
           aiError: null,
-        });
+        }, userId);
 
         revalidatePath("/insights");
 
@@ -215,7 +221,7 @@ export async function generateInsight(
         await updateInsightAI(insightId, {
           aiStatus: "failed",
           aiError: classified.userMessage,
-        });
+        }, userId);
 
         revalidatePath("/insights");
 
@@ -249,7 +255,9 @@ export async function generateInsight(
  */
 export async function retryInsight(insightId: string): Promise<ActionResult> {
   try {
-    const insight = await getInsightById(insightId);
+    const userId = "default_user"; // TODO: Replace with session.user.id after auth
+    
+    const insight = await getInsightById(insightId, userId);
     
     if (!insight) {
       return { success: false, error: "Insight not found" };
@@ -259,12 +267,12 @@ export async function retryInsight(insightId: string): Promise<ActionResult> {
     await updateInsightAI(insightId, {
       aiStatus: "pending",
       aiError: null,
-    });
+    }, userId);
 
     revalidatePath("/insights");
 
     // Get entries for the date range
-    const entries = await getEntriesByDateRange(insight.startDate, insight.endDate);
+    const entries = await getEntriesByDateRange(insight.startDate, insight.endDate, userId);
 
     if (entries.length === 0) {
       return {
@@ -276,7 +284,7 @@ export async function retryInsight(insightId: string): Promise<ActionResult> {
     // Update to processing
     await updateInsightAI(insightId, {
       aiStatus: "processing",
-    });
+    }, userId);
 
     revalidatePath("/insights");
 
@@ -291,7 +299,7 @@ export async function retryInsight(insightId: string): Promise<ActionResult> {
         themes: result.themes,
         sentimentTrend: result.sentimentTrend,
         aiError: null,
-      });
+      }, userId);
 
       revalidatePath("/insights");
 
@@ -304,7 +312,7 @@ export async function retryInsight(insightId: string): Promise<ActionResult> {
       await updateInsightAI(insightId, {
         aiStatus: "failed",
         aiError: classified.userMessage,
-      });
+      }, userId);
 
       revalidatePath("/insights");
 

@@ -13,7 +13,8 @@ export const metadata: Metadata = {
 };
 
 export default async function InsightsPage() {
-  const allInsights = await getAllInsights();
+  const userId = "default_user"; // TODO: Replace with session.user.id after auth
+  const allInsights = await getAllInsights(userId);
   
   // Separate weekly and monthly insights
   const weeklyInsights = allInsights.filter(i => i.insightType === "weekly");
