@@ -186,35 +186,31 @@ export async function updateEntry(
   await ensureInitialized();
   const sql = getDb();
 
-  // Build dynamic update query
-  const fields: string[] = [];
-  const values: Record<string, any> = { id, userId };
-
-  if (updates.content !== undefined) {
-    fields.push("content");
-    values.content = updates.content;
-  }
-
-  if (updates.mood !== undefined) {
-    fields.push("mood");
-    values.mood = updates.mood;
-  }
-
-  if (fields.length === 0) {
+  // If nothing to update, return current entry
+  if (updates.content === undefined && updates.mood === undefined) {
     return getEntryById(id, userId);
   }
 
-  // Always update updated_at
-  fields.push("updated_at");
-  values.updated_at = new Date();
-
-  // Build SET clause dynamically
-  const setClauses = fields.map((field) => `${field} = $${field}`).join(", ");
-
-  await sql.unsafe(
-    `UPDATE entries SET ${setClauses} WHERE id = $id AND user_id = $userId`,
-    values
-  );
+  // Handle different update combinations
+  if (updates.content !== undefined && updates.mood !== undefined) {
+    await sql`
+      UPDATE entries
+      SET content = ${updates.content}, mood = ${updates.mood}, updated_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+  } else if (updates.content !== undefined) {
+    await sql`
+      UPDATE entries
+      SET content = ${updates.content}, updated_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+  } else if (updates.mood !== undefined) {
+    await sql`
+      UPDATE entries
+      SET mood = ${updates.mood}, updated_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+  }
 
   return getEntryById(id, userId);
 }
@@ -257,8 +253,8 @@ export async function updateEntryAI(
     SET
       ai_status = ${aiData.aiStatus},
       ai_summary = ${aiData.aiSummary ?? null},
-      ai_sentiment = ${aiData.aiSentiment ? sql.json(aiData.aiSentiment) : null},
-      ai_themes = ${aiData.aiThemes ? sql.json(aiData.aiThemes) : null},
+      ai_sentiment = ${aiData.aiSentiment ? sql.json(aiData.aiSentiment as any) : null},
+      ai_themes = ${aiData.aiThemes ? sql.json(aiData.aiThemes as any) : null},
       ai_error = ${aiData.aiError ?? null},
       updated_at = NOW()
     WHERE id = ${id} AND user_id = ${userId}
@@ -353,8 +349,8 @@ export async function updateInsightAI(
     SET
       ai_status = ${aiData.aiStatus},
       content = ${aiData.content ?? null},
-      themes = ${aiData.themes ? sql.json(aiData.themes) : null},
-      sentiment_trend = ${aiData.sentimentTrend ? sql.json(aiData.sentimentTrend) : null},
+      themes = ${aiData.themes ? sql.json(aiData.themes as any) : null},
+      sentiment_trend = ${aiData.sentimentTrend ? sql.json(aiData.sentimentTrend as any) : null},
       ai_error = ${aiData.aiError ?? null},
       updated_at = NOW()
     WHERE id = ${id} AND user_id = ${userId}
