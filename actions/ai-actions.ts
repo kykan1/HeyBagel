@@ -15,6 +15,7 @@ import { classifyAIError, type ClassifiedError } from "@/lib/ai/errors";
 import type { InsightType } from "@/types";
 import { randomBytes } from "crypto";
 import { actionLogger } from "@/lib/utils/logger";
+import { requireAuth } from "@/lib/auth/helpers";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -31,7 +32,7 @@ export async function processEntryAI(
 
   return actionLogger.time("Process Entry AI", async () => {
     try {
-      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      const userId = await requireAuth();
       
       // Get the entry
       const entry = await getEntryById(entryId, userId);
@@ -123,7 +124,7 @@ export async function retryAIAnalysis(entryId: string): Promise<ActionResult> {
  */
 export async function regenerateAIAnalysis(entryId: string): Promise<ActionResult> {
   try {
-    const userId = "default_user"; // TODO: Replace with session.user.id after auth
+    const userId = await requireAuth();
     
     // Reset to pending first
     await updateEntryAI(entryId, {
@@ -161,7 +162,7 @@ export async function generateInsight(
 
   return actionLogger.time(`Generate ${insightType} Insight`, async () => {
     try {
-      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      const userId = await requireAuth();
       
       // Get entries for the date range
       const entries = await getEntriesByDateRange(startDate, endDate, userId);
@@ -255,7 +256,7 @@ export async function generateInsight(
  */
 export async function retryInsight(insightId: string): Promise<ActionResult> {
   try {
-    const userId = "default_user"; // TODO: Replace with session.user.id after auth
+    const userId = await requireAuth();
     
     const insight = await getInsightById(insightId, userId);
     

@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getEntryById } from "@/lib/db/queries";
 import { EntryDetail } from "@/components/EntryDetail";
 import { InsightPanel } from "@/components/InsightPanel";
 import { AITrigger } from "@/components/AITrigger";
 import { formatDate } from "@/lib/utils/date";
+import { auth } from "@/lib/auth/config";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,15 @@ interface EntryPageProps {
 
 export async function generateMetadata({ params }: EntryPageProps): Promise<Metadata> {
   const { id } = await params;
-  const userId = "default_user"; // TODO: Replace with session.user.id after auth
-  const entry = await getEntryById(id, userId);
+  const session = await auth();
+  if (!session?.user?.id) {
+    return {
+      title: "Entry Not Found - Hey Bagel",
+      description: "Please sign in to view this entry.",
+    };
+  }
+  
+  const entry = await getEntryById(id, session.user.id);
 
   if (!entry) {
     return {
@@ -34,8 +42,13 @@ export async function generateMetadata({ params }: EntryPageProps): Promise<Meta
 
 export default async function EntryPage({ params }: EntryPageProps) {
   const { id } = await params;
-  const userId = "default_user"; // TODO: Replace with session.user.id after auth
-  const entry = await getEntryById(id, userId);
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    redirect("/auth/signin");
+  }
+  
+  const entry = await getEntryById(id, session.user.id);
 
   if (!entry) {
     notFound();
