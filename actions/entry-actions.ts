@@ -8,6 +8,7 @@ import { createEntrySchema, updateEntrySchema } from "@/lib/utils/validation";
 import { getTodayISO } from "@/lib/utils/date";
 import { randomUUID } from "crypto";
 import { actionLogger } from "@/lib/utils/logger";
+import { requireAuth } from "@/lib/auth/helpers";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -18,6 +19,9 @@ export async function createEntry(
 ): Promise<ActionResult<{ entryId: string }>> {
   return actionLogger.time("Create Entry", async () => {
     try {
+      // Get authenticated user
+      const userId = await requireAuth();
+
       // Parse form data
       const rawData = {
         content: formData.get("content") as string,
@@ -35,7 +39,6 @@ export async function createEntry(
       // Create entry
       const entryId = randomUUID();
       const date = validatedData.date || getTodayISO();
-      const userId = "default_user"; // TODO: Replace with session.user.id after auth
       
       await dbCreateEntry(
         entryId,
@@ -57,6 +60,11 @@ export async function createEntry(
 
       return { success: true, data: { entryId } };
     } catch (error) {
+      // Handle auth errors specifically
+      if (error instanceof Error && error.message.includes("Unauthorized")) {
+        return { success: false, error: "You must be signed in to create entries" };
+      }
+      
       if (error instanceof z.ZodError) {
         actionLogger.warn("Validation failed", { error: error.errors });
         return { success: false, error: error.errors[0].message };
@@ -86,6 +94,8 @@ export async function updateEntry(
 ): Promise<ActionResult> {
   return actionLogger.time("Update Entry", async () => {
     try {
+      const userId = await requireAuth();
+
       const rawData = {
         content: formData.get("content") as string | null,
         mood: formData.get("mood") as string | null,
@@ -96,7 +106,6 @@ export async function updateEntry(
         mood: rawData.mood === "" ? null : rawData.mood || undefined,
       });
 
-      const userId = "default_user"; // TODO: Replace with session.user.id after auth
       const updated = await dbUpdateEntry(entryId, validatedData, userId);
 
       if (!updated) {
@@ -129,7 +138,7 @@ export async function updateEntry(
 export async function deleteEntryAction(entryId: string): Promise<ActionResult> {
   return actionLogger.time("Delete Entry", async () => {
     try {
-      const userId = "default_user"; // TODO: Replace with session.user.id after auth
+      const userId = await requireAuth();
       const deleted = await dbDeleteEntry(entryId, userId);
 
       if (!deleted) {

@@ -2,6 +2,8 @@ import { getAllInsights } from "@/lib/db/queries";
 import { InsightCard } from "@/components/InsightCard";
 import { OlderInsightsSection } from "@/components/OlderInsightsSection";
 import { GenerateInsightButton } from "@/components/GenerateInsightButton";
+import { auth } from "@/lib/auth/config";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -13,8 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default async function InsightsPage() {
-  const userId = "default_user"; // TODO: Replace with session.user.id after auth
-  const allInsights = await getAllInsights(userId);
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    redirect("/auth/signin");
+  }
+  
+  const allInsights = await getAllInsights(session.user.id);
   
   // Separate weekly and monthly insights
   const weeklyInsights = allInsights.filter(i => i.insightType === "weekly");

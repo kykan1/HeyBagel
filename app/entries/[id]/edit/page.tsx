@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getEntryById } from "@/lib/db/queries";
 import { EntryForm } from "@/components/EntryForm";
 import { updateEntry } from "@/actions/entry-actions";
+import { auth } from "@/lib/auth/config";
 import type { Metadata } from "next";
 import { formatDate } from "@/lib/utils/date";
 
@@ -14,8 +15,15 @@ interface EditEntryPageProps {
 
 export async function generateMetadata({ params }: EditEntryPageProps): Promise<Metadata> {
   const { id } = await params;
-  const userId = "default_user"; // TODO: Replace with session.user.id after auth
-  const entry = await getEntryById(id, userId);
+  const session = await auth();
+  if (!session?.user?.id) {
+    return {
+      title: "Entry Not Found - Hey Bagel",
+      description: "Please sign in to edit this entry.",
+    };
+  }
+  
+  const entry = await getEntryById(id, session.user.id);
 
   if (!entry) {
     return {
@@ -32,8 +40,13 @@ export async function generateMetadata({ params }: EditEntryPageProps): Promise<
 
 export default async function EditEntryPage({ params }: EditEntryPageProps) {
   const { id } = await params;
-  const userId = "default_user"; // TODO: Replace with session.user.id after auth
-  const entry = await getEntryById(id, userId);
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    redirect("/auth/signin");
+  }
+  
+  const entry = await getEntryById(id, session.user.id);
 
   if (!entry) {
     notFound();
