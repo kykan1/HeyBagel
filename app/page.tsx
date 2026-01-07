@@ -4,7 +4,8 @@ import { EntryList } from "@/components/EntryList";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+// Cache home page for 30 seconds, revalidate on-demand via Server Actions
+export const revalidate = 30;
 
 export const metadata: Metadata = {
   title: "Your Journal - Hey Bagel",
