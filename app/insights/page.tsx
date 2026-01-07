@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+// Cache insights page for 60 seconds, revalidate on-demand via Server Actions
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Insights - Hey Bagel",

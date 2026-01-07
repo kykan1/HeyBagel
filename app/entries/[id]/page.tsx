@@ -8,7 +8,9 @@ import { formatDate } from "@/lib/utils/date";
 import { auth } from "@/lib/auth/config";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+// Cache entry detail page for 60 seconds, revalidate on-demand via Server Actions
+export const revalidate = 60;
+
 interface EntryPageProps {
   params: Promise<{ id: string }>;
 }
